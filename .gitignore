@@ -1,0 +1,4 @@
+node_modules/
+pyramids.db
+.env
+npm-debug.log*

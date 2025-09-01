@@ -1,0 +1,266 @@
+{
+  "info": {
+    "name": "Pyramids Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "90a34fdc-c076-4720-94de-30997335cd8f"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "poiId",
+      "value": "1"
+    },
+    {
+      "key": "itineraryId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/",
+        "header": []
+      }
+    },
+    {
+      "name": "Auth ─ Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"tourist@example.com\",\n  \"name\": \"Tourist\",\n  \"password\": \"123456\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Auth ─ Login (sets {{token}})",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.access_token) {",
+              "    pm.collectionVariables.set('token', json.access_token);",
+              "    console.log('Token saved to collection variable');",
+              "  }",
+              "} catch (e) {",
+              "  console.warn('Could not parse JSON');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"tourist@example.com\",\n  \"password\": \"123456\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Auth ─ Me",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "POIs ─ List (all)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/pois",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "pois"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POIs ─ List (filter by city & q)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/pois?city=Giza&q=pyramid",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "pois"
+          ],
+          "query": [
+            {
+              "key": "city",
+              "value": "Giza"
+            },
+            {
+              "key": "q",
+              "value": "pyramid"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "POIs ─ Details",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/pois/{{poiId}}"
+      }
+    },
+    {
+      "name": "POIs ─ Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/pois",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Egyptian Museum\",\n  \"type\": \"Museum\",\n  \"city\": \"Cairo\",\n  \"governorate\": \"Cairo\",\n  \"lat\": 30.0478,\n  \"lng\": 31.2336,\n  \"openHours\": {\n    \"mon\": {\n      \"open\": \"09:00\",\n      \"close\": \"17:00\"\n    }\n  },\n  \"avgDurationMin\": 120,\n  \"priceTier\": 2,\n  \"tags\": [\n    \"museum\",\n    \"history\"\n  ],\n  \"bestTimeOfDay\": \"afternoon\",\n  \"descriptionShort\": \"Iconic museum with vast collections.\"\n}"
+        }
+      }
+    },
+    {
+      "name": "POIs ─ Update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/pois/{{poiId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Egyptian Museum (Updated)\",\n  \"type\": \"Museum\",\n  \"city\": \"Cairo\",\n  \"governorate\": \"Cairo\",\n  \"lat\": 30.0478,\n  \"lng\": 31.2336,\n  \"openHours\": {\n    \"mon\": {\n      \"open\": \"09:00\",\n      \"close\": \"17:00\"\n    }\n  },\n  \"avgDurationMin\": 120,\n  \"priceTier\": 2,\n  \"tags\": [\n    \"museum\",\n    \"history\"\n  ],\n  \"bestTimeOfDay\": \"afternoon\",\n  \"descriptionShort\": \"Updated description.\"\n}"
+        }
+      }
+    },
+    {
+      "name": "POIs ─ Delete",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/pois/{{poiId}}"
+      }
+    },
+    {
+      "name": "Itineraries ─ Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/itineraries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"meta\": {\n    \"destinations\": [\n      \"Cairo\",\n      \"Luxor\"\n    ],\n    \"days\": 3,\n    \"pace\": \"Balanced\"\n  },\n  \"plan\": {\n    \"days\": [\n      {\n        \"date\": \"2025-10-12\",\n        \"summary\": \"Giza Plateau & Saqqara\",\n        \"items\": [\n          {\n            \"poi_id\": 1,\n            \"start_time\": \"09:00\",\n            \"end_time\": \"12:00\",\n            \"notes\": \"Best for photos\"\n          }\n        ]\n      }\n    ]\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Itineraries ─ List (mine)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/itineraries"
+      }
+    },
+    {
+      "name": "Itineraries ─ Details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/itineraries/{{itineraryId}}"
+      }
+    },
+    {
+      "name": "Itineraries ─ Delete",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/itineraries/{{itineraryId}}"
+      }
+    }
+  ]
+}

@@ -1,10 +1,12 @@
+// db.js
 import Database from 'better-sqlite3';
 import 'dotenv/config';
 
 const DB_FILE = process.env.DB_FILE || './pyramids.db';
-export const db = new Database(DB_FILE);
+export const db = new Database(DB_FILE, { verbose: false });
 
 export function ensureSchema() {
+  // users + emailVerified
   db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,7 +16,50 @@ export function ensureSchema() {
       createdAt TEXT NOT NULL
     );
   `).run();
+  try {
+    db.prepare(`ALTER TABLE users ADD COLUMN emailVerified INTEGER DEFAULT 0;`).run();
+  } catch { /* column exists */ }
 
+  // refresh tokens (hashed) لإدارة الجلسات
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      createdAt TEXT NOT NULL,
+      expiresAt TEXT NOT NULL,
+      revokedAt TEXT,
+      userAgent TEXT,
+      ip TEXT,
+      FOREIGN KEY(userId) REFERENCES users(id)
+    );
+  `).run();
+
+  // email verification tokens
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      createdAt TEXT NOT NULL,
+      expiresAt TEXT NOT NULL,
+      FOREIGN KEY(userId) REFERENCES users(id)
+    );
+  `).run();
+
+  // password reset tokens
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      createdAt TEXT NOT NULL,
+      expiresAt TEXT NOT NULL,
+      FOREIGN KEY(userId) REFERENCES users(id)
+    );
+  `).run();
+
+  // باقي جداول مشروعك
   db.prepare(`
     CREATE TABLE IF NOT EXISTS pois (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,49 +101,33 @@ export function seedIfEmpty() {
   `);
 
   const seedData = [
-    {
-      name: 'Giza Pyramids',
-      type: 'Complex',
-      city: 'Giza',
-      governorate: 'Giza',
+    { name: 'Giza Pyramids', type: 'Complex', city: 'Giza', governorate: 'Giza',
       lat: 29.9792, lng: 31.1342,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
-      avgDurationMin: 180,
-      priceTier: 2,
-      tags: JSON.stringify(['pyramids', 'history', 'photography']),
+      avgDurationMin: 180, priceTier: 2,
+      tags: JSON.stringify(['pyramids','history','photography']),
       bestTimeOfDay: 'morning',
       descriptionShort: 'Khufu, Khafre, Menkaure and the Great Sphinx.'
     },
-    {
-      name: 'Saqqara – Step Pyramid',
-      type: 'Pyramid',
-      city: 'Giza',
-      governorate: 'Giza',
+    { name: 'Saqqara – Step Pyramid', type: 'Pyramid', city: 'Giza', governorate: 'Giza',
       lat: 29.8711, lng: 31.2166,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
-      avgDurationMin: 120,
-      priceTier: 2,
+      avgDurationMin: 120, priceTier: 2,
       tags: JSON.stringify(['history']),
       bestTimeOfDay: 'morning',
       descriptionShort: 'Djoser step pyramid by Imhotep.'
     },
-    {
-      name: 'Karnak Temple',
-      type: 'Temple',
-      city: 'Luxor',
-      governorate: 'Luxor',
+    { name: 'Karnak Temple', type: 'Temple', city: 'Luxor', governorate: 'Luxor',
       lat: 25.7188, lng: 32.6573,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
-      avgDurationMin: 150,
-      priceTier: 2,
-      tags: JSON.stringify(['temple', 'history']),
+      avgDurationMin: 150, priceTier: 2,
+      tags: JSON.stringify(['temple','history']),
       bestTimeOfDay: 'afternoon',
       descriptionShort: 'Massive complex dedicated to Amun.'
     }
   ];
 
-  const tx = db.transaction((rows) => { for (const r of rows) insert.run(r); });
+  const tx = db.transaction(rows => { for (const r of rows) insert.run(r); });
   tx(seedData);
-
   console.log('Seed data inserted (POIs).');
 }

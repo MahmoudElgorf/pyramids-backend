@@ -1,9 +1,12 @@
-// db.js
+// src/db.js
 import Database from 'better-sqlite3';
 import 'dotenv/config';
 
 const DB_FILE = process.env.DB_FILE || './pyramids.db';
-export const db = new Database(DB_FILE, { verbose: false });
+
+export const db = new Database(DB_FILE);
+
+try { db.pragma('journal_mode = WAL'); } catch { /* ignore on FS that doesn't support */ }
 
 export function ensureSchema() {
   // users + emailVerified
@@ -59,7 +62,7 @@ export function ensureSchema() {
     );
   `).run();
 
-  // باقي جداول مشروعك
+  // POIs
   db.prepare(`
     CREATE TABLE IF NOT EXISTS pois (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +81,7 @@ export function ensureSchema() {
     );
   `).run();
 
+  // itineraries
   db.prepare(`
     CREATE TABLE IF NOT EXISTS itineraries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +105,8 @@ export function seedIfEmpty() {
   `);
 
   const seedData = [
-    { name: 'Giza Pyramids', type: 'Complex', city: 'Giza', governorate: 'Giza',
+    {
+      name: 'Giza Pyramids', type: 'Complex', city: 'Giza', governorate: 'Giza',
       lat: 29.9792, lng: 31.1342,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
       avgDurationMin: 180, priceTier: 2,
@@ -109,7 +114,8 @@ export function seedIfEmpty() {
       bestTimeOfDay: 'morning',
       descriptionShort: 'Khufu, Khafre, Menkaure and the Great Sphinx.'
     },
-    { name: 'Saqqara – Step Pyramid', type: 'Pyramid', city: 'Giza', governorate: 'Giza',
+    {
+      name: 'Saqqara – Step Pyramid', type: 'Pyramid', city: 'Giza', governorate: 'Giza',
       lat: 29.8711, lng: 31.2166,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
       avgDurationMin: 120, priceTier: 2,
@@ -117,7 +123,8 @@ export function seedIfEmpty() {
       bestTimeOfDay: 'morning',
       descriptionShort: 'Djoser step pyramid by Imhotep.'
     },
-    { name: 'Karnak Temple', type: 'Temple', city: 'Luxor', governorate: 'Luxor',
+    {
+      name: 'Karnak Temple', type: 'Temple', city: 'Luxor', governorate: 'Luxor',
       lat: 25.7188, lng: 32.6573,
       openHours: JSON.stringify({ mon: { open: '08:00', close: '17:00' } }),
       avgDurationMin: 150, priceTier: 2,

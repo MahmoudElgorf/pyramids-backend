@@ -12,7 +12,7 @@ if (USE_PG) {
   const { default: pg } = await import('pg');
   const { Pool } = pg;
 
-  // لو اللينك External يستلزم SSL، Internal لا
+  // External URL يحتاج SSL، Internal عادة لا
   const useSSL = /render\.com|external/i.test(process.env.DATABASE_URL || '');
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,

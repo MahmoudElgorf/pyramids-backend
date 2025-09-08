@@ -12,14 +12,13 @@ if (USE_PG) {
   const { default: pg } = await import('pg');
   const { Pool } = pg;
 
-  // External URL يحتاج SSL، Internal عادة لا
   const useSSL = /render\.com|external/i.test(process.env.DATABASE_URL || '');
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: useSSL ? { rejectUnauthorized: false } : false,
   });
 
-  // يحوّل placeholders "?" إلى "$1, $2, ..."
+  // placeholders "?" → "$1, $2..."
   function toPgParams(sql, args) {
     let idx = 0;
     const out = sql.replace(/\?/g, () => `$${++idx}`);
@@ -51,7 +50,10 @@ if (USE_PG) {
     __pool: pool,
   };
 
+  // ---------- Postgres Schema ----------
   ensureSchema = async function ensureSchemaPg() {
+    console.log('[DB] Running Postgres schema');
+
     await db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -125,6 +127,7 @@ if (USE_PG) {
     `);
   };
 
+  // ---------- Postgres Seed ----------
   seedIfEmpty = async function seedIfEmptyPg() {
     const row = await db.prepare('SELECT COUNT(*) AS c FROM pois').get();
     const count = Number(row?.c ?? 0);
@@ -176,7 +179,7 @@ if (USE_PG) {
   };
 
 } else {
-  // ---------- SQLite (اختياري للمحلي) ----------
+  // ---------- SQLite (محلي فقط) ----------
   const { default: Database } = await import('better-sqlite3');
   const DB_FILE = process.env.DB_FILE || './pyramids.db';
   const sqlite = new Database(DB_FILE);

@@ -152,16 +152,37 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
+// Login (hardened)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password required' });
+    }
 
     const row = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!row) return res.status(400).json({ error: 'Incorrect email or password' });
 
-    const ok = await bcrypt.compare(password, row.passwordHash);
+    // pick stored hash regardless of column naming (legacy safety)
+    const storedHash =
+      row.passwordHash ??
+      row.password_hash ??
+      row.password ?? // legacy fallback (not recommended but avoids 500)
+      null;
+
+    if (typeof storedHash !== 'string' || storedHash.length < 20) {
+      console.error('[LOGIN] invalid/missing password hash for', email, 'value:', storedHash);
+      return res.status(500).json({ error: 'User password is invalid on server' });
+    }
+
+    let ok = false;
+    try {
+      ok = await bcrypt.compare(password, storedHash);
+    } catch (cmpErr) {
+      console.error('[LOGIN] bcrypt.compare error:', cmpErr);
+      return res.status(500).json({ error: 'Password check failed' });
+    }
+
     if (!ok) return res.status(400).json({ error: 'Incorrect email or password' });
 
     const user = {
@@ -201,14 +222,14 @@ router.post('/refresh', async (req, res) => {
 
     const payload = verifyRefresh(rt); // { id, iat, exp }
 
-    // Reuse detection: token valid cryptographically but not found / revoked in DB
+    // Reuse detection
     if (!dbRow || dbRow.revokedAt) {
       await revokeAllRefreshForUser(payload.id);
       clearRefreshCookie(res);
       return res.status(401).json({ error: 'Refresh token reuse detected' });
     }
 
-    // Rotate: revoke old & issue new
+    // Rotate
     await revokeRefreshByHash(rtHash);
 
     const newRt = signRefreshToken({ id: payload.id });
@@ -245,7 +266,7 @@ router.post('/logout', async (req, res) => {
 });
 
 // Me
-router.get('/me', async (req, res, next) => {
+router.get('/me', async (req, res) => {
   try {
     const auth = req.headers.authorization || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
@@ -281,14 +302,12 @@ router.patch('/me', async (req, res) => {
       await db.prepare('UPDATE users SET email = ?, emailVerified = false WHERE id = ?')
         .run(email, decoded.id);
 
-      // issue verify token
       const raw = crypto.randomBytes(32).toString('hex');
       await db.prepare(`
         INSERT INTO email_verification_tokens (userId, tokenHash, createdAt, expiresAt)
         VALUES (?, ?, ?, ?)
       `).run(decoded.id, hashToken(raw), nowISO(), addMs(VERIFY_TTL_MS));
 
-      // TODO send verification email
       return res.json({ ok: true, ...(isProd ? {} : { dev_verify_token: raw }) });
     }
 
@@ -305,7 +324,7 @@ router.patch('/me', async (req, res) => {
   }
 });
 
-// Change password (auth required)
+// Change password (auth required, hardened)
 router.post('/password/change', async (req, res) => {
   try {
     const auth = req.headers.authorization || '';
@@ -317,16 +336,26 @@ router.post('/password/change', async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'currentPassword and newPassword required' });
     }
-    const row = await db.prepare('SELECT passwordHash FROM users WHERE id = ?').get(decoded.id);
+    const row = await db.prepare('SELECT passwordHash, password_hash, password FROM users WHERE id = ?').get(decoded.id);
     if (!row) return res.status(404).json({ error: 'User not found' });
 
-    const ok = await bcrypt.compare(currentPassword, row.passwordHash);
+    const storedHash =
+      row.passwordHash ??
+      row.password_hash ??
+      row.password ??
+      null;
+
+    if (typeof storedHash !== 'string' || storedHash.length < 20) {
+      console.error('[PASSWORD CHANGE] invalid/missing hash for userId:', decoded.id, 'value:', storedHash);
+      return res.status(500).json({ error: 'User password is invalid on server' });
+    }
+
+    const ok = await bcrypt.compare(currentPassword, storedHash);
     if (!ok) return res.status(400).json({ error: 'Incorrect current password' });
 
     const newHash = await bcrypt.hash(newPassword, 10);
     await db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(newHash, decoded.id);
 
-    // revoke all sessions
     await revokeAllRefreshForUser(decoded.id);
     clearRefreshCookie(res);
     return res.json({ ok: true });
@@ -350,7 +379,6 @@ router.post('/password/forgot', async (req, res) => {
         INSERT INTO password_reset_tokens (userId, tokenHash, createdAt, expiresAt)
         VALUES (?, ?, ?, ?)
       `).run(user.id, hashToken(raw), nowISO(), addMs(RESET_TTL_MS));
-      // TODO: sendResetEmail(email, raw)
       if (!isProd) console.log('[DEV] password reset token:', raw);
     }
     return res.json({ ok: true });
@@ -375,7 +403,6 @@ router.post('/password/reset', async (req, res) => {
 
     const newHash = await bcrypt.hash(newPassword, 10);
     await db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(newHash, row.userId);
-    // cleanup + revoke sessions
     await db.prepare('DELETE FROM password_reset_tokens WHERE userId = ?').run(row.userId);
     await revokeAllRefreshForUser(row.userId);
     clearRefreshCookie(res);
@@ -399,7 +426,6 @@ router.post('/email/verify/request', async (req, res) => {
       INSERT INTO email_verification_tokens (userId, tokenHash, createdAt, expiresAt)
       VALUES (?, ?, ?, ?)
     `).run(decoded.id, hashToken(raw), nowISO(), addMs(VERIFY_TTL_MS));
-    // TODO: sendEmailVerification(currentEmail, raw)
     return res.json({ ok: true, ...(isProd ? {} : { dev_verify_token: raw }) });
   } catch (e) {
     console.error('[EMAIL VERIFY REQUEST] error', e);

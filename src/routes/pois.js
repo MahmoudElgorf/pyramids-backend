@@ -5,6 +5,50 @@ import { requireAuth } from '../middlewares/auth.js';
 
 const router = express.Router();
 
+/** Normalize a DB row (Postgres lower-cases unquoted identifiers) */
+function normalizePoi(r) {
+  if (!r) return null;
+
+  // raw fields (handle both cases just in case)
+  const openHoursRaw = r.openHours ?? r.openhours ?? null;
+  const tagsRaw = r.tags ?? null;
+
+  let openHours = null;
+  if (openHoursRaw) {
+    if (typeof openHoursRaw === 'string') {
+      try { openHours = JSON.parse(openHoursRaw); } catch { openHours = null; }
+    } else {
+      openHours = openHoursRaw;
+    }
+  }
+
+  let tags = [];
+  if (tagsRaw != null) {
+    if (Array.isArray(tagsRaw)) {
+      tags = tagsRaw;
+    } else if (typeof tagsRaw === 'string') {
+      try { tags = JSON.parse(tagsRaw); } catch { tags = []; }
+    }
+  }
+
+  return {
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    city: r.city,
+    governorate: r.governorate,
+    lat: r.lat,
+    lng: r.lng,
+    openHours,
+    avgDurationMin: r.avgDurationMin ?? r.avgdurationmin ?? null,
+    priceTier: r.priceTier ?? r.pricetier ?? null,
+    tags,
+    bestTimeOfDay: r.bestTimeOfDay ?? r.besttimeofday ?? null,
+    descriptionShort: r.descriptionShort ?? r.descriptionshort ?? '',
+    createdAt: r.createdAt ?? r.createdat ?? null,
+  };
+}
+
 router.get('/', async (req, res) => {
   const { city, q } = req.query;
   let sql = 'SELECT * FROM pois';
@@ -17,20 +61,14 @@ router.get('/', async (req, res) => {
   sql += ' ORDER BY id DESC LIMIT 200';
 
   const rows = await db.prepare(sql).all(...params);
-  res.json(rows.map(r => ({
-    ...r,
-    openHours: r.openHours ? JSON.parse(r.openHours) : null,
-    tags: r.tags ? JSON.parse(r.tags) : [],
-  })));
+  res.json(rows.map(normalizePoi));
 });
 
 router.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const r = await db.prepare('SELECT * FROM pois WHERE id = ?').get(id);
   if (!r) return res.status(404).json({ error: 'Not found' });
-  r.openHours = r.openHours ? JSON.parse(r.openHours) : null;
-  r.tags = r.tags ? JSON.parse(r.tags) : [];
-  res.json(r);
+  res.json(normalizePoi(r));
 });
 
 router.post('/', requireAuth, async (req, res) => {
@@ -53,9 +91,7 @@ router.post('/', requireAuth, async (req, res) => {
     p.bestTimeOfDay ?? 'morning', p.descriptionShort ?? ''
   );
 
-  row.openHours = row.openHours ? JSON.parse(row.openHours) : null;
-  row.tags = row.tags ? JSON.parse(row.tags) : [];
-  res.status(201).json(row);
+  res.status(201).json(normalizePoi(row));
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
@@ -81,9 +117,7 @@ router.put('/:id', requireAuth, async (req, res) => {
   );
 
   const row = await db.prepare('SELECT * FROM pois WHERE id = ?').get(id);
-  row.openHours = row.openHours ? JSON.parse(row.openHours) : null;
-  row.tags = row.tags ? JSON.parse(row.tags) : [];
-  res.json(row);
+  res.json(normalizePoi(row));
 });
 
 router.delete('/:id', requireAuth, async (req, res) => {
